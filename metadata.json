@@ -1,0 +1,5 @@
+{
+  "name": "My Websites",
+  "description": "A web application to create and manage a list of your websites, displayed in a visually appealing block format.",
+  "requestFramePermissions": []
+}
