@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import type { Website } from '../types';
 
 interface WebsiteCardProps {
@@ -6,6 +7,8 @@ interface WebsiteCardProps {
 }
 
 const WebsiteCard: React.FC<WebsiteCardProps> = ({ website }) => {
+  const isInternal = website.linkType === 'internal' && website.route;
+
   return (
     <div className="bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-indigo-500/30 transform hover:-translate-y-1 transition-all duration-300 flex flex-col">
       <img className="w-full h-48 object-cover" src={website.imageUrl} alt={website.name} />
@@ -20,14 +23,23 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({ website }) => {
             </span>
           ))}
         </div>
-        <a
-          href={website.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block self-start bg-gray-700 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-colors duration-300"
-        >
-          방문하기
-        </a>
+        {isInternal ? (
+          <Link
+            to={website.route as string}
+            className="inline-block self-start bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-colors duration-300"
+          >
+            내부 페이지 열기
+          </Link>
+        ) : (
+          <a
+            href={website.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block self-start bg-gray-700 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-colors duration-300"
+          >
+            방문하기
+          </a>
+        )}
       </div>
     </div>
   );

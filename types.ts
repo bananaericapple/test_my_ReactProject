@@ -5,6 +5,8 @@ export interface Website {
   description: string;
   imageUrl: string;
   tags: string[];
+  linkType?: 'external' | 'internal';
+  route?: string;
 }
 
-export type NewWebsiteData = Omit<Website, 'id' | 'imageUrl'>;
+export type NewWebsiteData = Omit<Website, 'id' | 'imageUrl' | 'linkType' | 'route'>;
