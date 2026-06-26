@@ -1,0 +1,29 @@
+{
+  "firebase": {
+    "databaseURL": "https://YOUR_PROJECT_ID-default-rtdb.firebaseregion.firebasedatabase.app",
+    "serviceAccountKeyPath": "serviceAccountKey.json"
+  },
+  "camera": {
+    "deviceIndex": 0,
+    "width": 1280,
+    "height": 720
+  },
+  "detection": {
+    "model": "yolov8n.pt",
+    "confidence": 0.4,
+    "vehicleClassIds": [2, 3, 5, 7],
+    "updateIntervalSeconds": 0.5,
+    "overlapThreshold": 0.3
+  },
+  "floors": [
+    {
+      "name": "B1",
+      "spots": [
+        { "id": "B1-01", "type": "normal", "x": 50,  "y": 80,  "w": 120, "h": 200 },
+        { "id": "B1-02", "type": "normal", "x": 180, "y": 80,  "w": 120, "h": 200 },
+        { "id": "B1-03", "type": "woman",  "x": 310, "y": 80,  "w": 120, "h": 200 },
+        { "id": "B1-04", "type": "disabled","x": 440, "y": 80,  "w": 120, "h": 200 }
+      ]
+    }
+  ]
+}

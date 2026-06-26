@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>ParkView - 실시간 주차 현황</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  :root {
+    --empty: #2ecc71;
+    --occupied: #e74c3c;
+    --woman-empty: #ff9fc7;
+    --disabled-empty: #4aa3ff;
+    --bg: #1c1f26;
+    --card: #262b35;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    background: var(--bg);
+    color: #eee;
+    padding: 24px;
+  }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  #status-bar {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    background: var(--card);
+    padding: 16px 20px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  #status-bar .big { font-size: 28px; font-weight: 700; }
+  #status-bar .label { font-size: 13px; color: #aaa; }
+  .floor-block { margin-bottom: 32px; }
+  .floor-title { font-size: 18px; margin-bottom: 12px; color: #ccc; }
+  .floor-map {
+    position: relative;
+    background: #11141a;
+    border-radius: 12px;
+    min-height: 320px;
+    overflow: auto;
+  }
+  .spot {
+    position: absolute;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: #111;
+    transition: background-color 0.3s ease;
+    border: 2px solid rgba(0,0,0,0.25);
+  }
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin: 16px 0 8px;
+    flex-wrap: wrap;
+    font-size: 13px;
+  }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+  #conn-status { font-size: 12px; padding: 4px 10px; border-radius: 20px; }
+  #conn-status.ok { background: #1e3d2b; color: #6fe39a; }
+  #conn-status.err { background: #3d1e1e; color: #ff8a8a; }
+</style>
+</head>
+<body>
+
+<h1>ParkView — 실시간 주차 현황</h1>
+<div id="conn-status" class="err">Firebase 연결 대기 중...</div>
+
+<div id="status-bar">
+  <div>
+    <div class="big"><span id="empty-count">-</span> / <span id="total-count">-</span></div>
+    <div class="label">빈칸 / 전체 칸</div>
+  </div>
+  <div>
+    <div class="big" id="last-updated">-</div>
+    <div class="label">마지막 업데이트</div>
+  </div>
+</div>
+
+<div class="legend">
+  <span><i class="swatch" style="background:var(--empty)"></i>빈칸</span>
+  <span><i class="swatch" style="background:var(--occupied)"></i>주차됨</span>
+  <span><i class="swatch" style="background:var(--woman-empty)"></i>여성전용(빈칸)</span>
+  <span><i class="swatch" style="background:var(--disabled-empty)"></i>장애인전용(빈칸)</span>
+</div>
+
+<div id="floors-container"></div>
+
+<!-- Firebase 설정: 아래 firebaseConfig 값을 본인 Firebase 프로젝트 설정으로 교체하세요.
+     (Firebase 콘솔 > 프로젝트 설정 > 일반 > 내 앱 > SDK 설정 및 구성 에서 확인) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseregion.firebasedatabase.app",
+    projectId: "YOUR_PROJECT_ID",
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const parkingRef = ref(db, "parking");
+
+  const connStatusEl = document.getElementById("conn-status");
+  const emptyCountEl = document.getElementById("empty-count");
+  const totalCountEl = document.getElementById("total-count");
+  const lastUpdatedEl = document.getElementById("last-updated");
+  const floorsContainer = document.getElementById("floors-container");
+
+  // config.json 의 칸 좌표를 그대로 옮겨와 도면 렌더링에 사용합니다.
+  // detect.py 와 동일한 좌표계를 쓰면 칸 위치가 일치합니다.
+  const SPOT_LAYOUT = {
+    "B1": {
+      "B1-01": { x: 50,  y: 80,  w: 120, h: 200, type: "normal" },
+      "B1-02": { x: 180, y: 80,  w: 120, h: 200, type: "normal" },
+      "B1-03": { x: 310, y: 80,  w: 120, h: 200, type: "woman" },
+      "B1-04": { x: 440, y: 80,  w: 120, h: 200, type: "disabled" }
+    }
+  };
+
+  function colorFor(type, occupied) {
+    if (occupied) return "var(--occupied)";
+    if (type === "woman") return "var(--woman-empty)";
+    if (type === "disabled") return "var(--disabled-empty)";
+    return "var(--empty)";
+  }
+
+  function renderFloors(floorsData) {
+    floorsContainer.innerHTML = "";
+    for (const floorName of Object.keys(floorsData)) {
+      const layout = SPOT_LAYOUT[floorName] || {};
+      const block = document.createElement("div");
+      block.className = "floor-block";
+
+      const title = document.createElement("div");
+      title.className = "floor-title";
+      title.textContent = `${floorName}층`;
+      block.appendChild(title);
+
+      const map = document.createElement("div");
+      map.className = "floor-map";
+
+      const spots = floorsData[floorName];
+      for (const spotId of Object.keys(spots)) {
+        const spotInfo = spots[spotId];
+        const pos = layout[spotId] || { x: 10, y: 10, w: 100, h: 150 };
+        const div = document.createElement("div");
+        div.className = "spot";
+        div.style.left = pos.x + "px";
+        div.style.top = pos.y + "px";
+        div.style.width = pos.w + "px";
+        div.style.height = pos.h + "px";
+        div.style.backgroundColor = colorFor(spotInfo.type, spotInfo.occupied);
+        div.textContent = spotId;
+        map.appendChild(div);
+      }
+
+      block.appendChild(map);
+      floorsContainer.appendChild(block);
+    }
+  }
+
+  onValue(parkingRef, (snapshot) => {
+    const data = snapshot.val();
+    if (!data) return;
+
+    connStatusEl.textContent = "Firebase 연결됨";
+    connStatusEl.className = "ok";
+
+    if (data.floors) renderFloors(data.floors);
+
+    if (data.summary) {
+      emptyCountEl.textContent = data.summary.empty ?? "-";
+      totalCountEl.textContent = data.summary.total ?? "-";
+      if (data.summary.lastUpdated) {
+        const d = new Date(data.summary.lastUpdated);
+        lastUpdatedEl.textContent = d.toLocaleTimeString("ko-KR");
+      }
+    }
+  }, (error) => {
+    connStatusEl.textContent = "Firebase 연결 오류: " + error.message;
+    connStatusEl.className = "err";
+  });
+</script>
+
+</body>
+</html>
